@@ -7,9 +7,26 @@ defmodule Albagen.Application do
 
   @impl true
   def start(_type, _args) do
+    http_pools =
+      Albagen.Config.albatross_nodes()
+      |> Enum.reduce(%{}, fn node, acc ->
+        acc |> Map.put(node, size: 8, count: 4)
+      end)
+      |> Map.put(:default, size: 8, count: 4)
+
     children = [
-      # Starts a worker by calling: Albagen.Worker.start_link(arg)
-      # {Albagen.Worker, arg}
+      %{
+        id: Albagen.Processes.Sqlite,
+        start:
+          {Sqlitex.Server, :start_link, [Albagen.Config.sqlite_path(), [name: :albagen_sqlite]]}
+      },
+      {Task.Supervisor, name: Albagen.Processes.WalletCreatorSupervisor, max_children: :infinity},
+      Albagen.Processes.SqliteInitializer,
+      Albagen.Processes.WalletManager,
+      %{
+        id: Albagen.Processes.RPCClient,
+        start: {Jsonrpc, :start_link, [[name: :nimiq, pools: http_pools]]}
+      }
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
