@@ -30,8 +30,7 @@ COPY --from=builder /etc/localtime /etc/localtime
 COPY --from=builder /opt/release .
 
 RUN apk update && apk --no-cache --update add ncurses-libs openssl util-linux build-base \
-    && chmod +x /usr/local/bin/entrypoint.sh
-    && mkdir /data 
+    && mkdir /data \
     && touch /data/albagen.sqlite
 
 ENV USER=root
