@@ -29,7 +29,7 @@ WORKDIR /opt/app
 COPY --from=builder /etc/localtime /etc/localtime
 COPY --from=builder /opt/release .
 
-RUN apk update && apk --no-cache --update add ncurses-libs openssl util-linux build-base \
+RUN apk update && apk --no-cache --update add ncurses-libs openssl util-linux build-base sqlite \
     && mkdir /data \
     && touch /data/albagen.sqlite
 
