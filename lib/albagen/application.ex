@@ -3,25 +3,29 @@ defmodule Albagen.Application do
   # for more information on OTP Applications
   @moduledoc false
 
+  require Logger
   use Application
 
   @impl true
   def start(_type, _args) do
+    schedulers = System.schedulers_online()
+
     http_pools =
       Albagen.Config.albatross_nodes()
       |> Enum.reduce(%{}, fn node, acc ->
-        acc |> Map.put(node, size: 8, count: 4)
+        acc |> Map.put(node, count: schedulers, protocol: :http2)
       end)
-      |> Map.put(:default, size: 8, count: 4)
+      |> Map.put(:default, size: 50, count: schedulers)
+
+    Logger.debug("HTTP pools: #{inspect(http_pools)}")
 
     children = [
+      {DynamicSupervisor, strategy: :one_for_one, name: Albagen.Processes.StakerSupervisor},
       %{
         id: Albagen.Processes.Sqlite,
         start:
           {Sqlitex.Server, :start_link, [Albagen.Config.sqlite_path(), [name: :albagen_sqlite]]}
       },
-      {Task.Supervisor, name: Albagen.Processes.WalletCreatorSupervisor, max_children: :infinity},
-      Albagen.Processes.SqliteInitializer,
       Albagen.Processes.WalletManager,
       %{
         id: Albagen.Processes.RPCClient,

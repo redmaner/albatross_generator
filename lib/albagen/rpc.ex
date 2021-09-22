@@ -4,114 +4,42 @@ defmodule Albagen.RPC do
 
   def list_stakes(host) do
     Request.new(method: "listStakes")
-    |> call(name: :nimiq, url: host)
-    |> case do
-      {:error, %Mint.TransportError{reason: :timeout}} ->
-        Process.sleep(2000)
-        list_stakes(host)
-
-      {:error, reason} ->
-        {:error, :list_stakes, reason}
-
-      return ->
-        return
-    end
+    |> make_rpc_call(host)
   end
 
   def get_latest_block_number(host) do
     Request.new(method: "getBlockNumber")
-    |> call(name: :nimiq, url: host)
-    |> case do
-      {:error, %Mint.TransportError{reason: :timeout}} ->
-        Process.sleep(2000)
-        get_latest_block_number(host)
-
-      {:error, reason} ->
-        {:error, :get_latest_block_number, reason}
-
-      return ->
-        return
-    end
+    |> make_rpc_call(host)
   end
 
   def import_account(host, key) do
     Request.new(method: "importRawKey", params: [key, nil])
-    |> call(name: :nimiq, url: host)
-    |> case do
-      {:error, %Mint.TransportError{reason: :timeout}} ->
-        Process.sleep(2000)
-        import_account(host, key)
-
-      {:error, reason} ->
-        {:error, :import_account, reason}
-
-      return ->
-        return
-    end
+    |> make_rpc_call(host)
   end
 
   def unlock_account(host, address) do
     Request.new(method: "unlockAccount", params: [address, nil, nil])
-    |> call(name: :nimiq, url: host)
-    |> case do
-      {:error, %Mint.TransportError{reason: :timeout}} ->
-        Process.sleep(2000)
-        unlock_account(host, address)
-
-      {:error, reason} ->
-        {:error, :unlock_account, reason}
-
-      return ->
-        return
-    end
+    |> make_rpc_call(host)
   end
 
   def lock_account(host, address) do
     Request.new(method: "lockAccount", params: [address])
-    |> call(name: :nimiq, url: host)
-    |> case do
-      {:error, %Mint.TransportError{reason: :timeout}} ->
-        Process.sleep(2000)
-        lock_account(host, address)
-
-      {:error, reason} ->
-        {:error, :lock_account, reason}
-
-      return ->
-        return
-    end
+    |> make_rpc_call(host)
   end
 
   def create_account(host) do
     Request.new(method: "createAccount", params: [""])
-    |> call(name: :nimiq, url: host)
-    |> case do
-      {:error, %Mint.TransportError{reason: :timeout}} ->
-        Process.sleep(2000)
-        create_account(host)
-
-      {:error, reason} ->
-        {:error, :create_account, reason}
-
-      return ->
-        return
-    end
+    |> make_rpc_call(host)
   end
 
   def get_account(host, address) do
     Request.new(method: "getAccount", params: [address])
-    |> call(name: :nimiq, url: host)
-    |> case do
-      {:error, %Mint.TransportError{reason: :timeout}} ->
-        Process.sleep(2000)
-        get_account(host, address)
+    |> make_rpc_call(host)
+  end
 
-      {:error, reason} ->
-        {:error, :get_account, reason}
-
-      return ->
-        return
-    end
+  def get_staker(host, address) do
+    Request.new(method: "getStaker", params: [address])
+    |> make_rpc_call(host)
   end
 
   def send_basic_transaction(host, recipient, value) do
@@ -123,18 +51,7 @@ defmodule Albagen.RPC do
         method: "sendBasicTransaction",
         params: [wallet, recipient, value - tx_fee, tx_fee, "+0"]
       )
-      |> call(name: :nimiq, url: host)
-      |> case do
-        {:error, %Mint.TransportError{reason: :timeout}} ->
-          Process.sleep(2000)
-          send_basic_transaction(host, recipient, value)
-
-        {:error, reason} ->
-          {:error, :send_basic_transaction, reason}
-
-        return ->
-          return
-      end
+      |> make_rpc_call(host)
     else
       {:error, :insufficient_fees}
     end
@@ -142,18 +59,7 @@ defmodule Albagen.RPC do
 
   defp create_basic_transaction(host, wallet, recipient, value) do
     Request.new(method: "createBasicTransaction", params: [wallet, recipient, value, 0, "+0"])
-    |> call(name: :nimiq, url: host)
-    |> case do
-      {:error, %Mint.TransportError{reason: :timeout}} ->
-        Process.sleep(2000)
-        create_basic_transaction(host, wallet, recipient, value)
-
-      {:error, reason} ->
-        {:error, :send_basic_transaction, reason}
-
-      return ->
-        return
-    end
+    |> make_rpc_call(host)
   end
 
   def send_new_staker_transaction(host, wallet, delegation, value) do
@@ -164,18 +70,7 @@ defmodule Albagen.RPC do
         method: "sendNewStakerTransaction",
         params: [wallet, delegation, value - tx_fee, tx_fee, "+0"]
       )
-      |> call(name: :nimiq, url: host)
-      |> case do
-        {:error, %Mint.TransportError{reason: :timeout}} ->
-          Process.sleep(2000)
-          send_new_staker_transaction(host, wallet, delegation, value)
-
-        {:error, reason} ->
-          {:error, :send_new_staker_transaction, reason}
-
-        return ->
-          return
-      end
+      |> make_rpc_call(host)
     end
   end
 
@@ -184,18 +79,34 @@ defmodule Albagen.RPC do
       method: "createNewStakerTransaction",
       params: [wallet, delegation, value, 0, "+0"]
     )
-    |> call(name: :nimiq, url: host)
+    |> make_rpc_call(host)
+  end
+
+  defp make_rpc_call(request = %Jsonrpc.Request{method: method}, host) do
+    # TODO
+    # Add custom headers to support password protected RPC servers
+
+    request
+    |> call(name: :nimiq, url: host, pool_timeout: 15_000, receive_timeout: 15_000)
     |> case do
       {:error, %Mint.TransportError{reason: :timeout}} ->
-        Process.sleep(2000)
-        create_new_staker_transaction(host, wallet, delegation, value)
+        Process.sleep(3000)
+        make_rpc_call(request, host)
+
+      {:error, %Finch.Error{reason: :request_timeout}} ->
+        Process.sleep(3000)
+        make_rpc_call(request, host)
 
       {:error, reason} ->
-        {:error, :create_new_staker_transaction, reason}
+        {:error, method, reason}
 
       return ->
         return
     end
+  catch
+    :exit, _ ->
+      Process.sleep(2000)
+      make_rpc_call(request, host)
   end
 
   defp extract_tx_fee({:ok, raw_tx}) do

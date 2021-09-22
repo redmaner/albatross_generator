@@ -7,6 +7,9 @@ defmodule Albagen.Processes.WalletManager do
 
   @max_attempts 3
   @attempt_timeout 10_000
+  @stakers_to_create 100
+
+  alias Albagen.Model.Account
 
   def init(_args) do
     address = Albagen.Config.seed_wallet_addres()
@@ -22,7 +25,7 @@ defmodule Albagen.Processes.WalletManager do
 
   def handle_continue(:import_and_unlock, state = %{address: address, private_key: private_key}) do
     Logger.info("Albatross generator started: waiting for nodes to be ready")
-    Process.sleep(120_000)
+    Process.sleep(2000)
 
     Albagen.Config.albatross_nodes()
     |> Enum.each(fn client ->
@@ -39,8 +42,33 @@ defmodule Albagen.Processes.WalletManager do
   end
 
   def handle_continue(:create_wallets, state) do
-    Albagen.create_wallets(1000)
-    {:noreply, state}
+    with {:ok, _result} <- Account.create_table(),
+         {:ok, count_stakers} <- Account.count_created_stakers(),
+         :ok <- create_new_stakers(count_stakers, @stakers_to_create),
+         :ok <- load_stakers_from_db() do
+      {:noreply, state}
+    else
+      error ->
+        raise error
+    end
+  end
+
+  defp create_new_stakers(stakers_created, amount_of_stakers)
+       when stakers_created < amount_of_stakers do
+    stakers_created..amount_of_stakers
+    |> Enum.each(&Albagen.Processes.Staker.create/1)
+  end
+
+  defp create_new_stakers(_stakers_created, _amount_of_stakers), do: :ok
+
+  defp load_stakers_from_db do
+    case Account.get_all() do
+      {:ok, stakers} ->
+        stakers |> Enum.each(&Albagen.Processes.Staker.load/1)
+
+      error ->
+        error
+    end
   end
 
   defp import_and_unlock_wallet(client, address, private_key, attempt) do

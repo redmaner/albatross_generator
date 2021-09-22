@@ -1,7 +1,4 @@
 defmodule Albagen.Config do
-
-  @max_concurrency max(8, System.schedulers_online())
-
   def sqlite_path, do: System.get_env("SQLITE_PATH", "~/albagen.sqlite")
 
   def albatross_nodes,
@@ -21,6 +18,4 @@ defmodule Albagen.Config do
         "SEED_WALLET_PRIVATE_KEY",
         "3336f25f5b4272a280c8eb8c1288b39bd064dfb32ebc799459f707a0e88c4e5f"
       )
-
-  def max_concurrency, do: System.get_env("MAX_CONCURRENCY", "#{@max_concurrency}") |> String.to_integer()
 end
