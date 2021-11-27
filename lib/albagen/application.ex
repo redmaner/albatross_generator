@@ -10,14 +10,14 @@ defmodule Albagen.Application do
   def start(_type, _args) do
     schedulers = System.schedulers_online()
 
-    http_pools =
-      Albagen.Config.albatross_nodes()
-      |> Enum.reduce(%{}, fn node, acc ->
-        acc |> Map.put(node, count: schedulers, protocol: :http2)
-      end)
-      |> Map.put(:default, size: 50, count: schedulers)
-
-    Logger.debug("HTTP pools: #{inspect(http_pools)}")
+    nimiqex_opts = [
+      name: :albagen_rpc_client,
+      protocol: :http2,
+      pool_count: schedulers,
+      pool_timeout: 15_000,
+      receive_timeout: 15_000,
+      url: Albagen.Config.albatross_nodes()
+    ]
 
     children = [
       {DynamicSupervisor, strategy: :one_for_one, name: Albagen.Processes.StakerSupervisor},
@@ -27,10 +27,7 @@ defmodule Albagen.Application do
           {Sqlitex.Server, :start_link, [Albagen.Config.sqlite_path(), [name: :albagen_sqlite]]}
       },
       Albagen.Processes.WalletManager,
-      %{
-        id: Albagen.Processes.RPCClient,
-        start: {Jsonrpc, :start_link, [[name: :nimiq, pools: http_pools]]}
-      }
+      {Nimiqex, nimiqex_opts}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

@@ -2,7 +2,9 @@ defmodule Albagen.Processes.Staker do
   require Logger
   use GenServer
 
+  alias Albagen.Core.Wallet
   alias Albagen.Model.Account
+  alias Albagen.RPC
 
   @epoch_time_avg :timer.minutes(3)
   @nim_in_luna 100_000
@@ -27,24 +29,13 @@ defmodule Albagen.Processes.Staker do
     end
   end
 
-  def new(account) do
-    case GenServer.whereis({:global, {__MODULE__, account.address}}) do
-      pid when is_pid(pid) ->
-        {:ok, pid}
-
-      nil ->
-        {__MODULE__, {:new, account}}
-        |> start_staker()
-    end
-  end
-
   def load(account) do
     case GenServer.whereis({:global, {__MODULE__, account.address}}) do
       pid when is_pid(pid) ->
         {:ok, pid}
 
       nil ->
-        {__MODULE__, {:from_db, account}}
+        {__MODULE__, account}
         |> start_staker()
     end
   end
@@ -62,11 +53,11 @@ defmodule Albagen.Processes.Staker do
     end
   end
 
-  def start_link(args = {_source, account}) do
-    GenServer.start_link(__MODULE__, args, name: {:global, {__MODULE__, account.address}})
+  def start_link(account = %Account{address: address}) do
+    GenServer.start_link(__MODULE__, account, name: {:global, {__MODULE__, address}})
   end
 
-  def init({_source, account}) do
+  def init(account) do
     Logger.metadata(address: account.address)
     Logger.metadata(seed: account.seed_number)
     Logger.info("Process started")
@@ -79,7 +70,11 @@ defmodule Albagen.Processes.Staker do
       if account.is_seeded == 0 do
         Process.send_after(self(), :seed_account, initial_timer(account.seed_number))
       else
-        Process.send_after(self(), :send_transaction, initial_timer(account.seed_number))
+        Process.send_after(
+          self(),
+          :send_transaction,
+          initial_timer(account.seed_number, :timer.seconds(30))
+        )
       end
 
     state = %{
@@ -99,35 +94,68 @@ defmodule Albagen.Processes.Staker do
       ) do
     balance = Enum.random(1..1000) * @nim_in_luna
 
-    with {:ok, _result} <- Albagen.RPC.import_account(node, private_key),
-         {:ok, _} <-
-           Albagen.RPC.send_basic_transaction(
-             node,
-             address,
-             balance
-           ),
-         :ok <- balance_received(node, address),
+    with {:ok, _result} <- Wallet.ensure_wallet_imported(node, address, private_key),
+         {:ok, _} <- Albagen.RPC.send_basic_transaction(node, address, balance),
+         :ok <- Wallet.wait_for_balance(node, address),
          {:ok, _result} <- Account.set_seeded(address) do
       Logger.info("Account has been imported and received initial balance #{balance}")
 
       {:noreply,
        %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+    else
+      {:error, method, reason} ->
+        Logger.error("Seeding account failed during #{method}: #{inspect(reason)}")
+
+        # TODO: check the method and maybe retry
+        {:stop, :seeding_failed, state}
+
+      {:error, reason} ->
+        # TODO: A database error doesn't necessarily mean the seeding failed
+        Logger.error("Seeding account failed: #{inspect(reason)}")
+        {:stop, :seeding_failed, state}
     end
   end
 
-  def handle_info(:send_transaction, state), do: {:noreply, state}
+  def handle_info(
+        :send_transaction,
+        state = %{account: %Account{address: address, node: host, private_key: private_key}}
+      ) do
+    with {:ok, _result} <- Wallet.ensure_wallet_imported(host, address, private_key),
+         {:ok, _result} <- Wallet.ensure_wallet_unlocked(host, address),
+         {:ok, staker} <- RPC.get_staker(host, address) do
+      Logger.debug("Staker: #{inspect(staker)}")
+      {:noreply, state}
+    else
+      {:error, :no_staker_found} ->
+        state |> do_new_staker_transaction()
 
-  defp balance_received(client, account_address) do
-    case Albagen.RPC.get_account(client, account_address) do
-      {:ok, %{"basic" => %{"balance" => 0}}} ->
-        Process.sleep(30_000)
-        balance_received(client, account_address)
+      {:error, method, reason} ->
+        Logger.error(
+          "Encountered error during transaction setup: #{method} --> #{inspect(reason)}"
+        )
 
-      {:ok, _balance} ->
-        :ok
+        {:noreply, state}
+    end
+  end
 
-      {:error, reason} ->
-        {:error, reason}
+  defp do_new_staker_transaction(state = %{account: %Account{address: address, node: node}}) do
+    with {:ok, balance} <- Wallet.get_balance(node, address),
+         validator <- select_active_validator(node),
+         stake_percentage <- 1..100 |> Enum.random(),
+         stake_balance <- (balance * stake_percentage / 100) |> floor(),
+         {:ok, _result} <-
+           RPC.send_new_staker_transaction(node, address, validator, stake_balance) do
+      Logger.info("Started staking with #{stake_balance} to validator #{validator}")
+
+      {:noreply,
+       %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+    else
+      {:error, method, reason} ->
+        Logger.error(
+          "Encountered error when creating new staker: #{method} --> #{inspect(reason)}"
+        )
+
+        {:noreply, state}
     end
   end
 

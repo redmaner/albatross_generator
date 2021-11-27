@@ -5,10 +5,9 @@ defmodule Albagen.Processes.WalletManager do
   require Logger
   use GenServer
 
-  @max_attempts 3
-  @attempt_timeout 10_000
-  @stakers_to_create 100
+  @stakers_to_create 600
 
+  alias Albagen.Core.Wallet
   alias Albagen.Model.Account
 
   def init(_args) do
@@ -29,7 +28,7 @@ defmodule Albagen.Processes.WalletManager do
 
     Albagen.Config.albatross_nodes()
     |> Enum.each(fn client ->
-      case import_and_unlock_wallet(client, address, private_key, 1) do
+      case import_and_unlock_wallet(client, address, private_key) do
         :ok ->
           :ok
 
@@ -53,10 +52,23 @@ defmodule Albagen.Processes.WalletManager do
     end
   end
 
+  defp import_and_unlock_wallet(client, address, private_key) do
+    with {:ok, _result} <- Wallet.ensure_wallet_imported(client, address, private_key),
+         {:ok, _result} <- Wallet.ensure_wallet_unlocked(client, address) do
+      Logger.info("Imported and unlocked seed address on #{client} -> ready to send transactions")
+      :ok
+    else
+      error ->
+        Logger.error("Error when importing and unlocking reward address: #{inspect(error)}")
+        :error
+    end
+  end
+
   defp create_new_stakers(stakers_created, amount_of_stakers)
        when stakers_created < amount_of_stakers do
     stakers_created..amount_of_stakers
-    |> Enum.each(&Albagen.Processes.Staker.create/1)
+    |> Task.async_stream(&Albagen.Processes.Staker.create/1, ordered: false, timeout: :infinity)
+    |> Stream.run()
   end
 
   defp create_new_stakers(_stakers_created, _amount_of_stakers), do: :ok
@@ -68,23 +80,6 @@ defmodule Albagen.Processes.WalletManager do
 
       error ->
         error
-    end
-  end
-
-  defp import_and_unlock_wallet(client, address, private_key, attempt) do
-    with {:ok, imported_address} <- Albagen.RPC.import_account(client, private_key),
-         true <- imported_address == address,
-         {:ok, _result} <- Albagen.RPC.unlock_account(client, address) do
-      Logger.info("Imported and unlocked seed address on #{client} -> ready to send transactions")
-      :ok
-    else
-      {:error, :timeout} when attempt <= @max_attempts ->
-        Process.sleep(attempt * @attempt_timeout)
-        import_and_unlock_wallet(client, address, private_key, attempt + 1)
-
-      _ = error ->
-        Logger.error("Error when importing and unlocking reward address: #{inspect(error)}")
-        :error
     end
   end
 end

@@ -22,7 +22,7 @@ defmodule Albagen.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:jsonrpc, "~> 0.2.0", hex: :finch_jsonrpc},
+      {:nimiqex, git: "https://github.com/redmaner/nimiqex.git", tag: "0.1.0"},
       {:sqlitex, "~> 1.7"},
       {:hexate, "~> 0.6.1"}
       # {:dep_from_hexpm, "~> 0.3.0"},

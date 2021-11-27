@@ -1,45 +1,63 @@
 defmodule Albagen.RPC do
-  alias Jsonrpc.Request
-  import Jsonrpc
-
   def list_stakes(host) do
-    Request.new(method: "listStakes")
+    Nimiqex.Blockchain.get_active_validators()
     |> make_rpc_call(host)
   end
 
   def get_latest_block_number(host) do
-    Request.new(method: "getBlockNumber")
+    Nimiqex.Blockchain.get_block_number()
     |> make_rpc_call(host)
   end
 
   def import_account(host, key) do
-    Request.new(method: "importRawKey", params: [key, nil])
+    Nimiqex.Wallet.import_raw_key(key, nil)
+    |> make_rpc_call(host)
+  end
+
+  def is_account_imported(host, address) do
+    Nimiqex.Wallet.is_account_imported(address)
     |> make_rpc_call(host)
   end
 
   def unlock_account(host, address) do
-    Request.new(method: "unlockAccount", params: [address, nil, nil])
+    Nimiqex.Wallet.unlock_account(address, nil, nil)
+    |> make_rpc_call(host)
+  end
+
+  def is_account_unlocked(host, address) do
+    Nimiqex.Wallet.is_account_unlocked(address)
     |> make_rpc_call(host)
   end
 
   def lock_account(host, address) do
-    Request.new(method: "lockAccount", params: [address])
+    Nimiqex.Wallet.lock_account(address)
     |> make_rpc_call(host)
   end
 
   def create_account(host) do
-    Request.new(method: "createAccount", params: [""])
+    Nimiqex.Wallet.create_account("")
     |> make_rpc_call(host)
   end
 
   def get_account(host, address) do
-    Request.new(method: "getAccount", params: [address])
+    Nimiqex.Blockchain.get_account_by_address(address)
     |> make_rpc_call(host)
   end
 
   def get_staker(host, address) do
-    Request.new(method: "getStaker", params: [address])
+    Nimiqex.Blockchain.get_staker_by_address(address)
     |> make_rpc_call(host)
+    |> case do
+      {:error, "getStakerByAddress", %Jsonrpc.Error{data: error_message}} = error ->
+        if error_message |> String.match?(~r(^No staker with address:)) do
+          {:error, :no_staker_found}
+        else
+          error
+        end
+
+      return ->
+        return
+    end
   end
 
   def send_basic_transaction(host, recipient, value) do
@@ -47,10 +65,7 @@ defmodule Albagen.RPC do
     tx_fee = create_basic_transaction(host, wallet, recipient, value) |> extract_tx_fee()
 
     if tx_fee < value do
-      Request.new(
-        method: "sendBasicTransaction",
-        params: [wallet, recipient, value - tx_fee, tx_fee, "+0"]
-      )
+      Nimiqex.Consensus.send_basic_transaction(wallet, recipient, value - tx_fee, tx_fee, "+0")
       |> make_rpc_call(host)
     else
       {:error, :insufficient_fees}
@@ -58,7 +73,7 @@ defmodule Albagen.RPC do
   end
 
   defp create_basic_transaction(host, wallet, recipient, value) do
-    Request.new(method: "createBasicTransaction", params: [wallet, recipient, value, 0, "+0"])
+    Nimiqex.Consensus.create_basic_transaction(wallet, recipient, value, 0, "+0")
     |> make_rpc_call(host)
   end
 
@@ -66,28 +81,26 @@ defmodule Albagen.RPC do
     tx_fee = create_new_staker_transaction(host, wallet, delegation, value) |> extract_tx_fee()
 
     if tx_fee < value do
-      Request.new(
-        method: "sendNewStakerTransaction",
-        params: [wallet, delegation, value - tx_fee, tx_fee, "+0"]
+      Nimiqex.Consensus.send_new_staker_transaction(
+        wallet,
+        wallet,
+        delegation,
+        value - tx_fee,
+        tx_fee,
+        "+0"
       )
       |> make_rpc_call(host)
     end
   end
 
   defp create_new_staker_transaction(host, wallet, delegation, value) do
-    Request.new(
-      method: "createNewStakerTransaction",
-      params: [wallet, delegation, value, 0, "+0"]
-    )
+    Nimiqex.Consensus.create_new_staker_transaction(wallet, wallet, delegation, value, 0, "+0")
     |> make_rpc_call(host)
   end
 
   defp make_rpc_call(request = %Jsonrpc.Request{method: method}, host) do
-    # TODO
-    # Add custom headers to support password protected RPC servers
-
     request
-    |> call(name: :nimiq, url: host, pool_timeout: 15_000, receive_timeout: 15_000)
+    |> Nimiqex.send(:albagen_rpc_client, host)
     |> case do
       {:error, %Mint.TransportError{reason: :timeout}} ->
         Process.sleep(3000)
