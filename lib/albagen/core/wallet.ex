@@ -2,6 +2,8 @@ defmodule Albagen.Core.Wallet do
   require Logger
   alias Albagen.RPC
 
+  @wait_for_balance_delay :timer.seconds(15)
+
   @doc """
   Imports the account if it is not yet imported
   """
@@ -43,8 +45,8 @@ defmodule Albagen.Core.Wallet do
   """
   def wait_for_balance(host, address) do
     case RPC.get_account(host, address) do
-      {:ok, %{"Basic" => %{"balance" => 0}}} ->
-        Process.sleep(30_000)
+      {:ok, %{"balance" => 0}} ->
+        Process.sleep(@wait_for_balance_delay)
         wait_for_balance(host, address)
 
       {:ok, _balance} ->

@@ -6,11 +6,13 @@ defmodule Albagen.Processes.Staker do
   alias Albagen.Model.Account
   alias Albagen.RPC
 
-  @epoch_time_avg :timer.minutes(3)
+  @epoch_time_avg :timer.seconds(20)
   @nim_in_luna 100_000
+  @balance_min 1 * @nim_in_luna
+  @basic_actions [:keep, :unstake, :update]
 
   @doc """
-  create a new staker from scratch and start a staker process once completed
+  create a new staker from scratch
   """
   def create(seed_number) do
     client = Albagen.Config.albatross_nodes() |> Enum.random()
@@ -122,13 +124,9 @@ defmodule Albagen.Processes.Staker do
       ) do
     with {:ok, _result} <- Wallet.ensure_wallet_imported(host, address, private_key),
          {:ok, _result} <- Wallet.ensure_wallet_unlocked(host, address),
-         {:ok, staker} <- RPC.get_staker(host, address) do
-      Logger.debug("Staker: #{inspect(staker)}")
-      {:noreply, state}
+         {:ok, balance} <- Wallet.get_balance(host, address) do
+      select_next_transaction(balance, state)
     else
-      {:error, :no_staker_found} ->
-        state |> do_new_staker_transaction()
-
       {:error, method, reason} ->
         Logger.error(
           "Encountered error during transaction setup: #{method} --> #{inspect(reason)}"
@@ -138,44 +136,175 @@ defmodule Albagen.Processes.Staker do
     end
   end
 
-  defp do_new_staker_transaction(state = %{account: %Account{address: address, node: node}}) do
-    with {:ok, balance} <- Wallet.get_balance(node, address),
-         validator <- select_active_validator(node),
-         stake_percentage <- 1..100 |> Enum.random(),
-         stake_balance <- (balance * stake_percentage / 100) |> floor(),
-         {:ok, _result} <-
-           RPC.send_new_staker_transaction(node, address, validator, stake_balance) do
-      Logger.info("Started staking with #{stake_balance} to validator #{validator}")
+  defp select_next_transaction(
+         balance,
+         state = %{account: %Account{address: address, node: host}}
+       ) do
+    case RPC.get_staker(host, address) do
+      {:ok, staker} ->
+        Logger.info(
+          "Current stake => stake balance: #{staker["balance"]}, delegation: #{staker["delegation"]} account balance: #{balance}"
+        )
+
+        @basic_actions
+        |> has_account_balance?(balance)
+        |> Enum.random()
+        |> do_transaction(staker, balance, state)
+
+      {:error, :no_staker_found} ->
+        do_transaction(:new_staker, nil, balance, state)
+
+      {:error, _method, reason} ->
+        Logger.error("Failed to retrieve staker: #{inspect(reason)}")
+
+        {:noreply,
+         %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+    end
+  end
+
+  defp has_account_balance?(actions, balance) when balance > @balance_min, do: [:stake | actions]
+  defp has_account_balance?(actions, _balance), do: actions
+
+  defp do_transaction(
+         :new_staker,
+         nil,
+         balance,
+         state = %{account: %Account{address: address, node: host}}
+       ) do
+    new_validator = select_active_validator(host)
+    stake_percentage = [10, 25, 50, 75, 100] |> Enum.random()
+    stake_amount = (balance * stake_percentage / 100) |> round()
+
+    case RPC.send_new_staker_transaction(host, address, new_validator, stake_amount) do
+      {:ok, _return} ->
+        Logger.info(
+          "Action: new_staker => stake: #{stake_amount} Luna, validator #{new_validator}"
+        )
+
+      {:error, _method, reason} ->
+        Logger.error("Failed to send new staker transaction: #{inspect(reason)}")
+    end
+
+    {:noreply,
+     %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+  rescue
+    RuntimeError ->
+      Logger.error("Failed to get active validators")
 
       {:noreply,
        %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
-    else
-      {:error, method, reason} ->
-        Logger.error(
-          "Encountered error when creating new staker: #{method} --> #{inspect(reason)}"
-        )
-
-        {:noreply, state}
-    end
   end
 
-  def select_active_validator(host) do
+  defp do_transaction(
+         :keep,
+         %{"balance" => stake_balance, "delegation" => delegation},
+         _balance,
+         state
+       ) do
+    Logger.info("Action: keep => stake: #{stake_balance} Luna, validator: #{delegation}")
+
+    {:noreply,
+     %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+  end
+
+  # TODO:
+  # Verify we have enough funds in the staking balance
+  # to pay for the update transaction
+  defp do_transaction(
+         :update,
+         %{"delegation" => old_validator},
+         _balance,
+         state = %{account: %Account{address: address, node: host}}
+       ) do
+    new_validator = select_active_validator(host, old_validator)
+
+    case RPC.send_update_staker_transaction(host, address, new_validator) do
+      {:ok, _return} ->
+        Logger.info(
+          "Action: update => moved stake from old validator #{old_validator} to new validator #{new_validator}"
+        )
+
+      {:error, _method, reason} ->
+        Logger.error("Failed to update stake: #{inspect(reason)}")
+    end
+
+    {:noreply,
+     %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+  rescue
+    RuntimeError ->
+      Logger.error("Failed to get active validators")
+
+      {:noreply,
+       %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+  end
+
+  defp do_transaction(
+         :unstake,
+         %{"balance" => stake_balance},
+         _balance,
+         state = %{account: %Account{address: address, node: host}}
+       ) do
+    unstake_percentage = [10, 25, 50, 75, 100] |> Enum.random()
+    unstake_amount = (stake_balance * unstake_percentage / 100) |> round()
+
+    case RPC.send_unstake_transaction(host, address, unstake_amount) do
+      {:ok, _return} ->
+        Logger.info(
+          "Action: unstake => decreased stake with #{unstake_amount} (#{unstake_percentage}%)"
+        )
+
+      {:error, _method, reason} ->
+        Logger.error("Failed to send unstake transaction: #{inspect(reason)}")
+    end
+
+    {:noreply,
+     %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+  end
+
+  defp do_transaction(
+         :stake,
+         _staker,
+         balance,
+         state = %{account: %Account{address: address, node: host}}
+       ) do
+    stake_percentage = [10, 25, 50, 75, 100] |> Enum.random()
+    stake_amount = (balance * stake_percentage / 100) |> round()
+
+    case RPC.send_stake_transaction(host, address, stake_amount) do
+      {:ok, _return} ->
+        Logger.info("Action: stake => increased stake with #{stake_amount}")
+
+      {:error, _method, reason} ->
+        Logger.error("Failed to send stake transaction: #{inspect(reason)}")
+    end
+
+    {:noreply,
+     %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+  end
+
+  def select_active_validator(host, current_validator \\ nil) do
     case Albagen.RPC.list_stakes(host) do
       {:ok, validators} when is_map(validators) and validators != %{} ->
         validators
+        |> drop_current_validator(current_validator)
         |> Enum.random()
         |> extract_validator()
 
-      error ->
-        {:error, error}
+      _error ->
+        raise "Retrieving active validator failed"
     end
   end
+
+  defp drop_current_validator(validators, nil), do: validators
+
+  defp drop_current_validator(validators, current_validator),
+    do: validators |> Map.drop([current_validator])
 
   defp extract_validator({delegation, _balance}), do: delegation
 
   defp extract_validator(_), do: raise("No validator found")
 
-  def initial_timer(seed_number, time \\ :timer.seconds(60)) do
+  def initial_timer(seed_number, time \\ :timer.seconds(20)) do
     seed_number
     |> rem(60)
     |> Kernel.+(1)

@@ -5,7 +5,7 @@ defmodule Albagen.Processes.WalletManager do
   require Logger
   use GenServer
 
-  @stakers_to_create 600
+  @stakers_to_create 200
 
   alias Albagen.Core.Wallet
   alias Albagen.Model.Account
@@ -66,7 +66,7 @@ defmodule Albagen.Processes.WalletManager do
 
   defp create_new_stakers(stakers_created, amount_of_stakers)
        when stakers_created < amount_of_stakers do
-    stakers_created..amount_of_stakers
+    (stakers_created + 1)..amount_of_stakers
     |> Task.async_stream(&Albagen.Processes.Staker.create/1, ordered: false, timeout: :infinity)
     |> Stream.run()
   end

@@ -98,6 +98,58 @@ defmodule Albagen.RPC do
     |> make_rpc_call(host)
   end
 
+  def send_stake_transaction(host, wallet, value) do
+    tx_fee = create_stake_transaction(host, wallet, value) |> extract_tx_fee()
+
+    if tx_fee < value do
+      Nimiqex.Consensus.send_stake_transaction(
+        wallet,
+        wallet,
+        value - tx_fee,
+        tx_fee,
+        "+0"
+      )
+      |> make_rpc_call(host)
+    end
+  end
+
+  defp create_stake_transaction(host, wallet, value) do
+    Nimiqex.Consensus.create_stake_transaction(wallet, wallet, value, 0, "+0")
+    |> make_rpc_call(host)
+  end
+
+  def send_update_staker_transaction(host, wallet, new_delegation) do
+    tx_fee = create_update_staker_transaction(host, wallet, new_delegation) |> extract_tx_fee()
+
+    Nimiqex.Consensus.send_update_transaction(wallet, wallet, new_delegation, tx_fee, "+0")
+    |> make_rpc_call(host)
+  end
+
+  defp create_update_staker_transaction(host, wallet, new_delegation) do
+    Nimiqex.Consensus.create_update_transaction(wallet, wallet, new_delegation, 0, "+0")
+    |> make_rpc_call(host)
+  end
+
+  def send_unstake_transaction(host, wallet, value) do
+    tx_fee = create_unstake_transaction(host, wallet, value) |> extract_tx_fee()
+
+    if tx_fee < value do
+      Nimiqex.Consensus.send_unstake_transaction(
+        wallet,
+        wallet,
+        value - tx_fee,
+        tx_fee,
+        "+0"
+      )
+      |> make_rpc_call(host)
+    end
+  end
+
+  defp create_unstake_transaction(host, wallet, value) do
+    Nimiqex.Consensus.create_unstake_transaction(wallet, wallet, value, 0, "+0")
+    |> make_rpc_call(host)
+  end
+
   defp make_rpc_call(request = %Jsonrpc.Request{method: method}, host) do
     request
     |> Nimiqex.send(:albagen_rpc_client, host)
