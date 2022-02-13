@@ -21,11 +21,7 @@ defmodule Albagen.Application do
 
     children = [
       {DynamicSupervisor, strategy: :one_for_one, name: Albagen.Processes.StakerSupervisor},
-      %{
-        id: Albagen.Processes.Sqlite,
-        start:
-          {Sqlitex.Server, :start_link, [Albagen.Config.sqlite_path(), [name: :albagen_sqlite]]}
-      },
+      Albagen.DB,
       Albagen.Processes.WalletManager,
       {Nimiqex, nimiqex_opts}
     ]

@@ -1,5 +1,5 @@
 defmodule Albagen.Model.Account do
-  @db :albagen_sqlite
+  alias Albagen.DB
 
   @type t :: %__MODULE__{
           address: String.t(),
@@ -29,8 +29,7 @@ defmodule Albagen.Model.Account do
   end
 
   def create_table do
-    Sqlitex.Server.query(
-      @db,
+    DB.query(
       "CREATE TABLE IF NOT EXISTS stakers(address TEXT PRIMARY KEY NOT NULL, public_key TEXT NOT NULL, private_key TEXT NOT NULL, node TEXT NOT NULL, seed_number INTEGER NOT NULL, is_seeded INTEGER NOT NULL);"
     )
   end
@@ -43,10 +42,9 @@ defmodule Albagen.Model.Account do
         seed_number: seed_number,
         is_seeded: is_seeded
       }) do
-    Sqlitex.Server.query(
-      :albagen_sqlite,
+    DB.query(
       "INSERT INTO stakers (address, public_key, private_key, node, seed_number, is_seeded) VALUES (?, ?, ?, ?, ?, ?)",
-      bind: [
+      [
         address,
         public_key,
         private_key,
@@ -58,21 +56,22 @@ defmodule Albagen.Model.Account do
   end
 
   def set_seeded(address) do
-    Sqlitex.Server.query(@db, "UPDATE stakers SET is_seeded = 1 WHERE address = ?",
-      bind: [address]
+    DB.query(
+      "UPDATE stakers SET is_seeded = 1 WHERE address = ?",
+      [address]
     )
   end
 
   def count_created_stakers do
-    case Sqlitex.Server.query(@db, "SELECT COUNT(*) AS count_stakers FROM stakers") do
-      {:ok, [[count_stakers: count_stakers]]} -> {:ok, count_stakers}
+    case DB.query("SELECT COUNT(*) AS count_stakers FROM stakers") do
+      {:ok, [{count_stakers}]} -> {:ok, count_stakers}
       {:ok, _result} -> {:ok, 0}
       error -> error
     end
   end
 
   def get_all do
-    Sqlitex.Server.query(:albagen_sqlite, "SELECT * FROM stakers ORDER BY seed_number")
+    DB.query("SELECT * FROM stakers ORDER BY seed_number")
     |> wrap_multi_return()
   end
 
@@ -86,14 +85,14 @@ defmodule Albagen.Model.Account do
 
   defp wrap_multi_return(error), do: error
 
-  defp parse_account_from_row(
-         address: address,
-         public_key: public_key,
-         private_key: private_key,
-         node: node,
-         seed_number: seed_number,
-         is_seeded: is_seeded
-       ) do
+  defp parse_account_from_row({
+         address,
+         public_key,
+         private_key,
+         node,
+         seed_number,
+         is_seeded
+       }) do
     %Albagen.Model.Account{
       address: address,
       public_key: public_key,

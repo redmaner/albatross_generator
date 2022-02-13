@@ -48,6 +48,7 @@ defmodule Albagen.Processes.WalletManager do
       {:noreply, state}
     else
       error ->
+        Logger.error("Inspect #{inspect(error)}")
         raise error
     end
   end
