@@ -1,4 +1,6 @@
 defmodule Albagen.RPC do
+  require Logger
+
   def list_stakes(host) do
     Nimiqex.Blockchain.get_active_validators()
     |> make_rpc_call(host)
@@ -155,10 +157,12 @@ defmodule Albagen.RPC do
     |> Nimiqex.send(:albagen_rpc_client, host)
     |> case do
       {:error, %Mint.TransportError{reason: :timeout}} ->
+        Logger.warn("Timeout when executing request #{method}, retrying in 3 seconds")
         Process.sleep(3000)
         make_rpc_call(request, host)
 
       {:error, %Finch.Error{reason: :request_timeout}} ->
+        Logger.warn("Timeout when executing request #{method}, retrying in 3 seconds")
         Process.sleep(3000)
         make_rpc_call(request, host)
 
