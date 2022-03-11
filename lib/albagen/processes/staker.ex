@@ -2,6 +2,7 @@ defmodule Albagen.Processes.Staker do
   require Logger
   use GenServer
 
+  alias Albagen.Config
   alias Albagen.Core.Wallet
   alias Albagen.Model.Account
   alias Albagen.RPC
@@ -94,7 +95,10 @@ defmodule Albagen.Processes.Staker do
         :seed_account,
         state = %{account: %Account{private_key: private_key, address: address, node: node}}
       ) do
-    balance = Enum.random(1..1000) * @nim_in_luna
+    min_nim = Config.new_account_min_nim()
+    max_nim = Config.new_account_max_nim()
+
+    balance = Enum.random(min_nim..max_nim) * @nim_in_luna
 
     with {:ok, _result} <- Wallet.ensure_wallet_imported(node, address, private_key),
          {:ok, _} <- Albagen.RPC.send_basic_transaction(node, address, balance),

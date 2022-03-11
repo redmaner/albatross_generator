@@ -40,6 +40,7 @@ defmodule Albagen.DB do
   @impl true
   def init_worker(database_file) do
     Logger.debug("Starting Sqlite worker")
+
     case :esqlite3.open(database_file) do
       {:ok, conn} -> {:ok, conn, database_file}
       {:error, reason} -> raise reason

@@ -8,6 +8,8 @@ defmodule Albagen.Application do
 
   @impl true
   def start(_type, _args) do
+    Albagen.Config.show_config()
+
     schedulers = System.schedulers_online()
 
     nimiqex_opts = [

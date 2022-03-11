@@ -5,10 +5,9 @@ defmodule Albagen.Processes.WalletManager do
   require Logger
   use GenServer
 
-  @stakers_to_create 200
-
   alias Albagen.Core.Wallet
   alias Albagen.Model.Account
+  alias Albagen.Config
 
   def init(_args) do
     address = Albagen.Config.seed_wallet_addres()
@@ -41,9 +40,11 @@ defmodule Albagen.Processes.WalletManager do
   end
 
   def handle_continue(:create_wallets, state) do
+    stakers_to_create = Config.stakers_to_create()
+
     with {:ok, _result} <- Account.create_table(),
          {:ok, count_stakers} <- Account.count_created_stakers(),
-         :ok <- create_new_stakers(count_stakers, @stakers_to_create),
+         :ok <- create_new_stakers(count_stakers, stakers_to_create),
          :ok <- load_stakers_from_db() do
       {:noreply, state}
     else

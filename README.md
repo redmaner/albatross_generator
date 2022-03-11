@@ -43,3 +43,16 @@ Currently the following is important to know when using Albagen:
 * Albagen can run hundreds of staker processes to stress test Albatross. However, the amount of stakers that is supported is highly dependent on hardware. Albagen uses the Erlang VM which automatically scales on the available hardware, and can therefore scale vertically out of the box. 
 * Albagen doesn't support distributed Elixir / Erlang. This can be added in the future, if required. 
 * Albagen can be compiled in release mode, so that a local Erlang installation is not required.
+
+### Configuration
+Albagen can be configured with environement variables:
+| Env   | Description |
+|:------|:------------|
+| ALBATROSS_NODES | The albatross node which is used to send transactions. Mutliple nodes can be provided and should be comma separated |
+| SQLITE_PATH | The path to the Sqlite file that Albagen will use to save the newly created accounts |
+| STAKERS_TO_CREATE | The amount of stakers that Albagen will create to send staking contract transactions | 
+| SEED_WALLET_ADDRESS | The address of the seed wallet, the wallet that is used to provide stakers with their initial balance |
+| SEED_WALLET_PRIVATE_KEY | The seed wallet private key to access the account on an Albatross node |
+| NEW_ACCOUNT_MIN_NIM | The minimum amount of NIM a new staker must receive from the seed wallet. Default is 1 NIM |
+| NEW_ACCOUNT_MAX_NIM | The maximum amount of NIM a new staker should not exceed. The default is 1000. If the min and max NIM are a range, a random amount is picked from the given range |
+| TIMER_CAP_IN_SECS | The maximum time in seconds before a staker transactions should be rescheduled |
