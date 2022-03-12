@@ -7,7 +7,6 @@ defmodule Albagen.Processes.Staker do
   alias Albagen.Model.Account
   alias Albagen.RPC
 
-  @epoch_time_avg :timer.seconds(20)
   @nim_in_luna 100_000
   @balance_min 1 * @nim_in_luna
   @basic_actions [:keep, :unstake, :update]
@@ -32,27 +31,18 @@ defmodule Albagen.Processes.Staker do
     end
   end
 
-  def load(account) do
-    case GenServer.whereis({:global, {__MODULE__, account.address}}) do
-      pid when is_pid(pid) ->
-        {:ok, pid}
-
-      nil ->
-        {__MODULE__, account}
-        |> start_staker()
+  def load(account = %Account{address: address}) do
+    case GenServer.whereis({:global, {__MODULE__, address}}) do
+      pid when is_pid(pid) -> {:ok, pid}
+      nil -> {__MODULE__, account} |> start_staker()
     end
   end
 
   defp start_staker(child_spec) do
     case DynamicSupervisor.start_child(Albagen.Processes.StakerSupervisor, child_spec) do
-      {:ok, pid} ->
-        {:ok, pid}
-
-      {:error, {:already_started, pid}} ->
-        {:ok, pid}
-
-      _ = error ->
-        {:error, "#{inspect(error)}"}
+      {:ok, pid} -> {:ok, pid}
+      {:error, {:already_started, pid}} -> {:ok, pid}
+      _ = error -> {:error, "#{inspect(error)}"}
     end
   end
 
@@ -63,69 +53,27 @@ defmodule Albagen.Processes.Staker do
   def init(account) do
     Logger.metadata(address: account.address)
     Logger.metadata(seed: account.seed_number)
-    Logger.info("Process started")
 
-    # If an account is not seeded yet (see seed_account) we spread
-    # the processes over an hour. This is to prevent spiking nodes with heavy
-    # load since seeding an account is a rather expensive operation especially
-    # when doing it for multiple accounts at once
-    timer =
-      if account.is_seeded == 0 do
-        Process.send_after(self(), :seed_account, initial_timer(account.seed_number))
-      else
-        Process.send_after(
-          self(),
-          :send_transaction,
-          initial_timer(account.seed_number, :timer.seconds(30))
-        )
-      end
+    Process.sleep(account.seed_number)
 
     state = %{
       account: account,
-      timer: timer
+      timer: schedule_staker()
     }
+
+    Logger.info("Process started")
 
     {:ok, state}
   end
 
-  # This seeds an account:
-  # 1) It imports the account on the node
-  # 2) Receives an initial balance from the seed address
-  def handle_info(
-        :seed_account,
-        state = %{account: %Account{private_key: private_key, address: address, node: node}}
-      ) do
-    min_nim = Config.new_account_min_nim()
-    max_nim = Config.new_account_max_nim()
-
-    balance = Enum.random(min_nim..max_nim) * @nim_in_luna
-
-    with {:ok, _result} <- Wallet.ensure_wallet_imported(node, address, private_key),
-         {:ok, _} <- Albagen.RPC.send_basic_transaction(node, address, balance),
-         :ok <- Wallet.wait_for_balance(node, address),
-         {:ok, _result} <- Account.set_seeded(address) do
-      Logger.info("Account has been imported and received initial balance #{balance}")
-
-      {:noreply,
-       %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
-    else
-      {:error, method, reason} ->
-        Logger.error("Seeding account failed during #{method}: #{inspect(reason)}")
-
-        # TODO: check the method and maybe retry
-        {:stop, :seeding_failed, state}
-
-      {:error, reason} ->
-        # TODO: A database error doesn't necessarily mean the seeding failed
-        Logger.error("Seeding account failed: #{inspect(reason)}")
-        {:stop, :seeding_failed, state}
-    end
-  end
-
   def handle_info(
         :send_transaction,
-        state = %{account: %Account{address: address, node: host, private_key: private_key}}
+        state = %{timer: timer, account: %Account{address: address, node: host, private_key: private_key}}
       ) do
+    if timer do
+      Process.cancel_timer(timer)
+    end
+
     with {:ok, _result} <- Wallet.ensure_wallet_imported(host, address, private_key),
          {:ok, _result} <- Wallet.ensure_wallet_unlocked(host, address),
          {:ok, balance} <- Wallet.get_balance(host, address) do
@@ -155,19 +103,48 @@ defmodule Albagen.Processes.Staker do
         |> Enum.random()
         |> do_transaction(staker, balance, state)
 
+      {:error, :no_staker_found} when balance == 0 ->
+        Logger.warn("Seeding account, no funds")
+        do_transaction(:seed_account, nil, 0, state)
+
       {:error, :no_staker_found} ->
         do_transaction(:new_staker, nil, balance, state)
 
       {:error, _method, reason} ->
         Logger.error("Failed to retrieve staker: #{inspect(reason)}")
 
-        {:noreply,
-         %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+        {:noreply, %{state | timer: schedule_staker()}}
     end
   end
 
   defp has_account_balance?(actions, balance) when balance > @balance_min, do: [:stake | actions]
   defp has_account_balance?(actions, _balance), do: actions
+
+  defp do_transaction(
+         :seed_account,
+         nil,
+         0,
+         state = %{account: %Account{address: address, node: host}}
+       ) do
+    min_nim = Config.new_account_min_nim()
+    max_nim = Config.new_account_max_nim()
+
+    balance = Enum.random(min_nim..max_nim) * @nim_in_luna
+
+    with {:ok, _} <- Albagen.RPC.send_basic_transaction(host, address, balance),
+         :ok <- Wallet.wait_for_balance(host, address) do
+      Logger.info("Action: seed_account => balance: #{balance}")
+
+      {:noreply,
+       %{state | timer: schedule_staker()}}
+    else
+      {:error, method, reason} ->
+        Logger.error("Seeding account failed during #{method}: #{inspect(reason)}")
+
+        # TODO: check the method and maybe retry
+        {:stop, :seeding_failed, state}
+    end
+  end
 
   defp do_transaction(
          :new_staker,
@@ -189,14 +166,12 @@ defmodule Albagen.Processes.Staker do
         Logger.error("Failed to send new staker transaction: #{inspect(reason)}")
     end
 
-    {:noreply,
-     %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+    {:noreply, %{state | timer: schedule_staker()}}
   rescue
     RuntimeError ->
       Logger.error("Failed to get active validators")
 
-      {:noreply,
-       %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+      {:noreply, %{state | timer: schedule_staker()}}
   end
 
   defp do_transaction(
@@ -207,8 +182,7 @@ defmodule Albagen.Processes.Staker do
        ) do
     Logger.info("Action: keep => stake: #{stake_balance} Luna, validator: #{delegation}")
 
-    {:noreply,
-     %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+    {:noreply, %{state | timer: schedule_staker()}}
   end
 
   # TODO:
@@ -232,14 +206,12 @@ defmodule Albagen.Processes.Staker do
         Logger.error("Failed to update stake: #{inspect(reason)}")
     end
 
-    {:noreply,
-     %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+    {:noreply, %{state | timer: schedule_staker()}}
   rescue
     RuntimeError ->
       Logger.error("Failed to get active validators")
 
-      {:noreply,
-       %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+      {:noreply, %{state | timer: schedule_staker()}}
   end
 
   defp do_transaction(
@@ -261,8 +233,7 @@ defmodule Albagen.Processes.Staker do
         Logger.error("Failed to send unstake transaction: #{inspect(reason)}")
     end
 
-    {:noreply,
-     %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+    {:noreply, %{state | timer: schedule_staker()}}
   end
 
   defp do_transaction(
@@ -282,8 +253,7 @@ defmodule Albagen.Processes.Staker do
         Logger.error("Failed to send stake transaction: #{inspect(reason)}")
     end
 
-    {:noreply,
-     %{state | timer: Process.send_after(self(), :send_transaction, random_epoch_timer())}}
+    {:noreply, %{state | timer: schedule_staker()}}
   end
 
   def select_active_validator(host, current_validator \\ nil) do
@@ -308,17 +278,11 @@ defmodule Albagen.Processes.Staker do
 
   defp extract_validator(_), do: raise("No validator found")
 
-  def initial_timer(seed_number, time \\ :timer.seconds(20)) do
-    seed_number
-    |> rem(60)
-    |> Kernel.+(1)
-    |> Kernel.*(time)
-    |> Kernel.+(1..time |> Enum.random())
-  end
+  defp schedule_staker do
+    timer_cap = Config.timer_cap_in_secs()
 
-  def random_epoch_timer do
-    1..10
-    |> Enum.random()
-    |> Kernel.*(@epoch_time_avg)
+    next = 0..timer_cap |> Enum.random()
+
+    Process.send_after(self(), :send_transaction, next)
   end
 end

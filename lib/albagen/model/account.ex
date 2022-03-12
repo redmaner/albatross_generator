@@ -6,11 +6,10 @@ defmodule Albagen.Model.Account do
           public_key: String.t(),
           private_key: String.t(),
           node: String.t(),
-          seed_number: integer(),
-          is_seeded: integer()
+          seed_number: integer()
         }
 
-  defstruct ~w[address public_key private_key node seed_number is_seeded]a
+  defstruct ~w[address public_key private_key node seed_number]a
 
   def parse_from_json(
         %{"address" => address, "privateKey" => private_key, "publicKey" => public_key},
@@ -23,14 +22,13 @@ defmodule Albagen.Model.Account do
        public_key: public_key,
        private_key: private_key,
        node: node,
-       seed_number: seed_number,
-       is_seeded: 0
+       seed_number: seed_number
      }}
   end
 
   def create_table do
     DB.query(
-      "CREATE TABLE IF NOT EXISTS stakers(address TEXT PRIMARY KEY NOT NULL, public_key TEXT NOT NULL, private_key TEXT NOT NULL, node TEXT NOT NULL, seed_number INTEGER NOT NULL, is_seeded INTEGER NOT NULL);"
+      "CREATE TABLE IF NOT EXISTS stakers(address TEXT PRIMARY KEY NOT NULL, public_key TEXT NOT NULL, private_key TEXT NOT NULL, node TEXT NOT NULL, seed_number INTEGER NOT NULL);"
     )
   end
 
@@ -39,26 +37,17 @@ defmodule Albagen.Model.Account do
         public_key: public_key,
         private_key: private_key,
         node: node,
-        seed_number: seed_number,
-        is_seeded: is_seeded
+        seed_number: seed_number
       }) do
     DB.query(
-      "INSERT INTO stakers (address, public_key, private_key, node, seed_number, is_seeded) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO stakers (address, public_key, private_key, node, seed_number) VALUES (?, ?, ?, ?, ?)",
       [
         address,
         public_key,
         private_key,
         node,
-        seed_number,
-        is_seeded
+        seed_number
       ]
-    )
-  end
-
-  def set_seeded(address) do
-    DB.query(
-      "UPDATE stakers SET is_seeded = 1 WHERE address = ?",
-      [address]
     )
   end
 
@@ -90,16 +79,14 @@ defmodule Albagen.Model.Account do
          public_key,
          private_key,
          node,
-         seed_number,
-         is_seeded
+         seed_number
        }) do
     %Albagen.Model.Account{
       address: address,
       public_key: public_key,
       private_key: private_key,
       node: node,
-      seed_number: seed_number,
-      is_seeded: is_seeded
+      seed_number: seed_number
     }
   end
 end
