@@ -1,4 +1,4 @@
-FROM hexpm/elixir:1.12.3-erlang-24.0.6-alpine-3.14.0 as builder
+FROM hexpm/elixir:1.13.3-erlang-24.3-alpine-3.15.0 as builder
 
 RUN apk update && apk --no-cache --update add tzdata build-base git openssh \
    && cp /usr/share/zoneinfo/Europe/Amsterdam /etc/localtime
@@ -12,7 +12,7 @@ RUN mix local.rebar --force &&\
 
 # Cache elixir deps
 COPY ./mix.* ./
-RUN mix deps.get
+RUN mix deps.get --only prod
 COPY ./config ./config
 RUN mix deps.compile
 
@@ -20,7 +20,7 @@ COPY ./lib ./lib
 
 RUN mix release --path=/opt/release
 
-FROM alpine:3.14
+FROM alpine:3.15
 
 ENV SQLITE_PATH=/data/albagen.sqlite
 
@@ -29,7 +29,7 @@ WORKDIR /opt/app
 COPY --from=builder /etc/localtime /etc/localtime
 COPY --from=builder /opt/release .
 
-RUN apk update && apk --no-cache --update add ncurses-libs openssl util-linux build-base sqlite \
+RUN apk update && apk --no-cache --update add ncurses-libs openssl util-linux sqlite libstdc++ unixodbc lksctp-tools \
     && mkdir /data \
     && touch /data/albagen.sqlite
 
