@@ -19,45 +19,19 @@ defmodule Albagen.Config do
     )
   end
 
-  def sqlite_path do
-    System.get_env("SQLITE_PATH", "~/albagen.sqlite")
-  end
+  def sqlite_path, do: Application.get_env(:albagen, :sqlite_path)
 
-  def albatross_nodes do
-    System.get_env(
-      "ALBATROSS_NODES",
-      "http://seed1.nimiq.local:8648,http://seed2.nimiq.local:8648,http://seed3.nimiq.local:8648,http://seed4.nimiq.local:8648"
-    )
-    |> String.split(",", trim: true)
-  end
+  def albatross_nodes, do: Application.get_env(:albagen, :albatross_nodes)
 
-  def seed_wallet_addres do
-    System.get_env("SEED_WALLET_ADDRESS", "NQ87 HKRC JYGR PJN5 KQYQ 5TM1 26XX 7TNG YT27")
-  end
+  def seed_wallet_addres, do: Application.get_env(:albagen, :seed_wallet_address)
 
-  def seed_wallet_key do
-    System.get_env(
-      "SEED_WALLET_PRIVATE_KEY",
-      "3336f25f5b4272a280c8eb8c1288b39bd064dfb32ebc799459f707a0e88c4e5f"
-    )
-  end
+  def seed_wallet_key, do: Application.get_env(:albagen, :seed_wallet_key)
 
-  def new_account_min_nim do
-    min_nim = System.get_env("NEW_ACCOUNT_MIN_NIM", "1") |> String.to_integer()
-    max(min_nim, 1)
-  end
+  def new_account_min_nim, do: Application.get_env(:albagen, :new_account_min_nim)
 
-  def new_account_max_nim do
-    System.get_env("NEW_ACCOUNT_MAX_NIM", "1000") |> String.to_integer()
-  end
+  def new_account_max_nim, do: Application.get_env(:albagen, :new_account_max_nim)
 
-  def stakers_to_create do
-    System.get_env("STAKERS_TO_CREATE", "100") |> String.to_integer()
-  end
+  def stakers_to_create, do: Application.get_env(:albagen, :stakers_to_create)
 
-  def timer_cap_in_secs do
-    System.get_env("TIMER_CAP_IN_SECS", "600")
-    |> String.to_integer()
-    |> :timer.seconds()
-  end
+  def timer_cap_in_secs, do: Application.get_env(:albagen, :timer_cap_in_secs)
 end
