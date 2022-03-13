@@ -2,7 +2,7 @@ defmodule Albagen.Core.Wallet do
   require Logger
   alias Albagen.RPC
 
-  @wait_for_balance_delay :timer.seconds(3)
+  @wait_for_balance_delay :timer.seconds(5)
 
   @doc """
   Imports the account if it is not yet imported
@@ -43,11 +43,17 @@ defmodule Albagen.Core.Wallet do
   @doc """
   Waits untill the given account has a balance higher than zero
   """
-  def wait_for_balance(host, address) do
+  def wait_for_balance(host, address, attempt \\ 1)
+
+  def wait_for_balance(_host, _address, attempt) when attempt > 10,
+    do: {:error, :no_balance_after_waiting}
+
+  def wait_for_balance(host, address, attempt) do
     case RPC.get_account(host, address) do
       {:ok, %{"balance" => 0}} ->
+        Logger.debug("Balance not yet received, waiting...")
         Process.sleep(@wait_for_balance_delay)
-        wait_for_balance(host, address)
+        wait_for_balance(host, address, attempt + 1)
 
       {:ok, _balance} ->
         :ok

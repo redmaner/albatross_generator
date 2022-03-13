@@ -12,15 +12,26 @@ defmodule Albagen.Processes.Staker do
   @basic_actions [:keep, :unstake, :update]
 
   @doc """
-  create a new staker from scratch
+  Create stakers by a range. This function is ran in a Task
+  """
+  def create_by_range(range) do
+    range
+    |> Enum.each(&create/1)
+
+    Logger.debug("Task completed")
+  end
+
+  @doc """
+  Creates a new staker and starts a staker process
   """
   def create(seed_number) do
     client = Albagen.Config.albatross_nodes() |> Enum.random()
 
     with {:ok, wallet} <- Albagen.RPC.create_account(client),
          {:ok, account} <- Albagen.Model.Account.parse_from_json(wallet, client, seed_number),
-         {:ok, _result} <- Account.insert(account) do
-      Logger.info("Created account", address: account.address, seed: seed_number)
+         :ok <- Logger.info("New account created", address: account.address, seed: seed_number),
+         :ok <- Account.buffer(account),
+         {:ok, _pid} <- load(account) do
       :ok
     else
       {:error, call, reason} ->
@@ -31,8 +42,12 @@ defmodule Albagen.Processes.Staker do
     end
   end
 
+  @doc """
+  Loads a staker process. This is either called after a
+  staker is created, or when a staker is loaded from Sqlite
+  """
   def load(account = %Account{address: address}) do
-    case GenServer.whereis({:global, {__MODULE__, address}}) do
+    case GenServer.whereis(name(address)) do
       pid when is_pid(pid) -> {:ok, pid}
       nil -> {__MODULE__, account} |> start_staker()
     end
@@ -46,34 +61,36 @@ defmodule Albagen.Processes.Staker do
     end
   end
 
+  defp name(address), do: {:global, {__MODULE__, address}}
+
   def start_link(account = %Account{address: address}) do
-    GenServer.start_link(__MODULE__, account, name: {:global, {__MODULE__, address}})
+    GenServer.start_link(__MODULE__, account, name: name(address))
   end
 
-  def init(account) do
+  def init(account = %Account{seed_number: seed_number}) do
     Logger.metadata(address: account.address)
-    Logger.metadata(seed: account.seed_number)
+    Logger.metadata(seed: seed_number)
 
-    Process.sleep(account.seed_number)
-
+    # On initial startup of a staker process the staker process is
+    # scheduled randomly between now and the next 30 minutes
+    # this is done to spread processes evenly and prevent thundering
+    # herd on both Albatross nodes and the Erlang VM
     state = %{
       account: account,
-      timer: schedule_staker()
+      timer: schedule_staker(:timer.minutes(30))
     }
 
-    Logger.info("Process started")
+    Logger.info("Staker process started")
 
     {:ok, state}
   end
 
   def handle_info(
         :send_transaction,
-        state = %{timer: timer, account: %Account{address: address, node: host, private_key: private_key}}
+        state = %{
+          account: %Account{address: address, node: host, private_key: private_key}
+        }
       ) do
-    if timer do
-      Process.cancel_timer(timer)
-    end
-
     with {:ok, _result} <- Wallet.ensure_wallet_imported(host, address, private_key),
          {:ok, _result} <- Wallet.ensure_wallet_unlocked(host, address),
          {:ok, balance} <- Wallet.get_balance(host, address) do
@@ -104,7 +121,7 @@ defmodule Albagen.Processes.Staker do
         |> do_transaction(staker, balance, state)
 
       {:error, :no_staker_found} when balance == 0 ->
-        Logger.warn("Seeding account, no funds")
+        Logger.debug("Account has no funds, start seeding account")
         do_transaction(:seed_account, nil, 0, state)
 
       {:error, :no_staker_found} ->
@@ -126,23 +143,26 @@ defmodule Albagen.Processes.Staker do
          0,
          state = %{account: %Account{address: address, node: host}}
        ) do
-    min_nim = Config.new_account_min_nim()
-    max_nim = Config.new_account_max_nim()
+    min_nim = Config.new_account_min_nim() * @nim_in_luna
+    max_nim = Config.new_account_max_nim() * @nim_in_luna
 
-    balance = Enum.random(min_nim..max_nim) * @nim_in_luna
+    balance = Enum.random(min_nim..max_nim)
 
     with {:ok, _} <- Albagen.RPC.send_basic_transaction(host, address, balance),
          :ok <- Wallet.wait_for_balance(host, address) do
       Logger.info("Action: seed_account => balance: #{balance}")
 
-      {:noreply,
-       %{state | timer: schedule_staker()}}
+      {:noreply, %{state | timer: schedule_staker()}}
     else
       {:error, method, reason} ->
         Logger.error("Seeding account failed during #{method}: #{inspect(reason)}")
 
         # TODO: check the method and maybe retry
         {:stop, :seeding_failed, state}
+
+      error ->
+        Logger.error("Unhandled error when seeding account: #{inspect(error)}")
+        {:noreply, state}
     end
   end
 
@@ -278,11 +298,16 @@ defmodule Albagen.Processes.Staker do
 
   defp extract_validator(_), do: raise("No validator found")
 
+  defp schedule_staker(time) do
+    next = 0..time |> Enum.random()
+    :erlang.send_after(next, self(), :send_transaction)
+  end
+
   defp schedule_staker do
     timer_cap = Config.timer_cap_in_secs()
 
     next = 0..timer_cap |> Enum.random()
 
-    Process.send_after(self(), :send_transaction, next)
+    :erlang.send_after(next, self(), :send_transaction)
   end
 end

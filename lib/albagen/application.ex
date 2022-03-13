@@ -22,8 +22,9 @@ defmodule Albagen.Application do
     ]
 
     children = [
+      {Task.Supervisor, name: Albagen.Processes.AccountCreator},
       {DynamicSupervisor, strategy: :one_for_one, name: Albagen.Processes.StakerSupervisor},
-      Albagen.DB,
+      Albagen.Model.Account,
       Albagen.Processes.WalletManager,
       {Nimiqex, nimiqex_opts}
     ]

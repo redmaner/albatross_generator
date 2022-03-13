@@ -5,7 +5,7 @@ config :albagen,
   albatross_nodes:
     System.get_env(
       "ALBATROSS_NODES",
-      "http://seed2.nimiq.local:8648,http://seed3.nimiq.local:8648,http://seed4.nimiq.local:8648"
+      "http://seed1.nimiq.local:8648,http://seed2.nimiq.local:8648,http://seed3.nimiq.local:8648,http://seed4.nimiq.local:8648"
     )
     |> String.split(",", trim: true),
   seed_wallet_address:
