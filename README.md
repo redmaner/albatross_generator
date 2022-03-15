@@ -56,3 +56,8 @@ Albagen can be configured with environement variables:
 | NEW_ACCOUNT_MIN_NIM | The minimum amount of NIM a new staker must receive from the seed wallet. Default is 1 NIM |
 | NEW_ACCOUNT_MAX_NIM | The maximum amount of NIM a new staker should not exceed. The default is 1000. If the min and max NIM are a range, a random amount is picked from the given range |
 | TIMER_CAP_IN_SECS | The maximum time in seconds before a staker transactions should be rescheduled |
+
+
+## License
+
+This project is under the [Apache License 2.0](./LICENSE.md).
