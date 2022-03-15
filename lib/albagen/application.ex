@@ -22,6 +22,7 @@ defmodule Albagen.Application do
     ]
 
     children = [
+      Albagen.Processes.Observer,
       {Task.Supervisor, name: Albagen.Processes.AccountCreator},
       {DynamicSupervisor, strategy: :one_for_one, name: Albagen.Processes.StakerSupervisor},
       Albagen.Model.Account,

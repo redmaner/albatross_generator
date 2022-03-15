@@ -15,10 +15,13 @@ defmodule Albagen.Processes.Staker do
   Create stakers by a range. This function is ran in a Task
   """
   def create_by_range(range) do
+    :telemetry.execute([:albagen, :task], %{action: "add", number: 1})
+
     range
     |> Enum.each(&create/1)
 
     Logger.debug("Task completed")
+    :telemetry.execute([:albagen, :task], %{action: "remove", number: 1})
   end
 
   @doc """
@@ -72,12 +75,12 @@ defmodule Albagen.Processes.Staker do
     Logger.metadata(seed: seed_number)
 
     # On initial startup of a staker process the staker process is
-    # scheduled randomly between now and the next 30 minutes
+    # scheduled randomly between now and the next 15 minutes
     # this is done to spread processes evenly and prevent thundering
     # herd on both Albatross nodes and the Erlang VM
     state = %{
       account: account,
-      timer: schedule_staker(:timer.minutes(30))
+      timer: schedule_staker(:timer.minutes(15))
     }
 
     Logger.info("Staker process started")
@@ -151,6 +154,7 @@ defmodule Albagen.Processes.Staker do
     with {:ok, _} <- Albagen.RPC.send_basic_transaction(host, address, balance),
          :ok <- Wallet.wait_for_balance(host, address) do
       Logger.info("Action: seed_account => balance: #{balance}")
+      :telemetry.execute([:albagen, :tx], %{value: 1})
 
       {:noreply, %{state | timer: schedule_staker()}}
     else
@@ -181,6 +185,8 @@ defmodule Albagen.Processes.Staker do
         Logger.info(
           "Action: new_staker => stake: #{stake_amount} Luna, validator #{new_validator}"
         )
+
+        :telemetry.execute([:albagen, :tx], %{value: 1})
 
       {:error, _method, reason} ->
         Logger.error("Failed to send new staker transaction: #{inspect(reason)}")
@@ -222,6 +228,8 @@ defmodule Albagen.Processes.Staker do
           "Action: update => moved stake from old validator #{old_validator} to new validator #{new_validator}"
         )
 
+        :telemetry.execute([:albagen, :tx], %{value: 1})
+
       {:error, _method, reason} ->
         Logger.error("Failed to update stake: #{inspect(reason)}")
     end
@@ -249,6 +257,8 @@ defmodule Albagen.Processes.Staker do
           "Action: unstake => decreased stake with #{unstake_amount} (#{unstake_percentage}%)"
         )
 
+        :telemetry.execute([:albagen, :tx], %{value: 1})
+
       {:error, _method, reason} ->
         Logger.error("Failed to send unstake transaction: #{inspect(reason)}")
     end
@@ -268,6 +278,8 @@ defmodule Albagen.Processes.Staker do
     case RPC.send_stake_transaction(host, address, stake_amount) do
       {:ok, _return} ->
         Logger.info("Action: stake => increased stake with #{stake_amount}")
+
+        :telemetry.execute([:albagen, :tx], %{value: 1})
 
       {:error, _method, reason} ->
         Logger.error("Failed to send stake transaction: #{inspect(reason)}")

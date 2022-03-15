@@ -9,7 +9,7 @@ services:
     - SEED_WALLET_PRIVATE_KEY=3336f25f5b4272a280c8eb8c1288b39bd064dfb32ebc799459f707a0e88c4e5f
     - NEW_ACCOUNT_MIN_NIM=100
     - NEW_ACCOUNT_MAX_NIM=1000
-    - STAKERS_TO_CREATE=500
+    - STAKERS_TO_CREATE=1000
     volumes:
     - albagen_data:/data
     network_mode: host
