@@ -19,7 +19,7 @@ release:
 	MIX_ENV=prod mix release 
 
 run-release:
-	SQLITE_PATH=./albagen.sqlite STAKERS_TO_CREATE=3000 _build/prod/rel/albagen/bin/albagen start
+	SQLITE_PATH=./albagen.sqlite _build/prod/rel/albagen/bin/albagen start
 
 docker-image:
 	docker buildx build -t albagen:latest .

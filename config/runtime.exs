@@ -21,4 +21,5 @@ config :albagen,
   timer_cap_in_secs:
     System.get_env("TIMER_CAP_IN_SECS", "90")
     |> String.to_integer()
-    |> :timer.seconds()
+    |> :timer.seconds(),
+  allow_action_keep: System.get_env("ALLOW_ACTION_KEEP", "true") == "true"

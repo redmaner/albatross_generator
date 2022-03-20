@@ -41,21 +41,26 @@ You require the following in order to run Albagen:
 Currently the following is important to know when using Albagen:
 * Albagen currently doesn't support username and password when accessing the RPC interface of Albatross
 * Albagen can run hundreds of staker processes to stress test Albatross. However, the amount of stakers that is supported is highly dependent on hardware. Albagen uses the Erlang VM which automatically scales on the available hardware, and can therefore scale vertically out of the box. 
+* The amount of transactions is limited during creation of new accounts and seeding accounts. This will improve greatly once all desired accounts are created and seeded.
 * Albagen doesn't support distributed Elixir / Erlang. This can be added in the future, if required. 
 * Albagen can be compiled in release mode, so that a local Erlang installation is not required.
 
 ### Configuration
 Albagen can be configured with environement variables:
-| Env   | Description |
-|:------|:------------|
+| Env   | Description | Default |
+|:------|:------------|:------------|
 | ALBATROSS_NODES | The albatross node which is used to send transactions. Mutliple nodes can be provided and should be comma separated |
-| SQLITE_PATH | The path to the Sqlite file that Albagen will use to save the newly created accounts |
-| STAKERS_TO_CREATE | The amount of stakers that Albagen will create to send staking contract transactions | 
+| SQLITE_PATH | The path to the Sqlite file that Albagen will use to save the newly created accounts | 
+| STAKERS_TO_CREATE | The amount of stakers that Albagen will create to send staking contract transactions | 1000 |
 | SEED_WALLET_ADDRESS | The address of the seed wallet, the wallet that is used to provide stakers with their initial balance |
 | SEED_WALLET_PRIVATE_KEY | The seed wallet private key to access the account on an Albatross node |
-| NEW_ACCOUNT_MIN_NIM | The minimum amount of NIM a new staker must receive from the seed wallet. Default is 1 NIM |
-| NEW_ACCOUNT_MAX_NIM | The maximum amount of NIM a new staker should not exceed. The default is 1000. If the min and max NIM are a range, a random amount is picked from the given range |
-| TIMER_CAP_IN_SECS | The maximum time in seconds before a staker transactions should be rescheduled |
+| NEW_ACCOUNT_MIN_NIM | The minimum amount of NIM a new staker must receive from the seed wallet.| 100 NIM |
+| NEW_ACCOUNT_MAX_NIM | The maximum amount of NIM a new staker should not exceed. If the min and max NIM are a range, a random amount is picked from the given range | 1000 NIM |
+| TIMER_CAP_IN_SECS | The maximum time in seconds before a staker transactions should be rescheduled | 90 seconds |
+| ALLOW_ACTION_KEEP | When set to true, allows the staker to keep their current staking contract state. When set to false all stakers are forced to send a transaction each cycle. Setting this to false makes Albagen more spammy. | true |
+
+### Docker
+This repository provides a reference Dockerfile to create a Docker image and a docker-compose file that is setup to work out of the box with the 4 validator setup of Albatross. 
 
 
 ## License

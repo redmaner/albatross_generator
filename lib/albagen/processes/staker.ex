@@ -9,7 +9,7 @@ defmodule Albagen.Processes.Staker do
 
   @nim_in_luna 100_000
   @balance_min 1 * @nim_in_luna
-  @basic_actions [:keep, :unstake, :update]
+  @basic_actions [:unstake, :update]
 
   @doc """
   Create stakers by a range. This function is ran in a Task
@@ -119,6 +119,7 @@ defmodule Albagen.Processes.Staker do
         )
 
         @basic_actions
+        |> is_action_keep_allowed?(Config.allow_action_keep())
         |> has_account_balance?(balance)
         |> Enum.random()
         |> do_transaction(staker, balance, state)
@@ -136,6 +137,9 @@ defmodule Albagen.Processes.Staker do
         {:noreply, %{state | timer: schedule_staker()}}
     end
   end
+
+  defp is_action_keep_allowed?(actions, true), do: [:keep | actions]
+  defp is_action_keep_allowed?(actions, false), do: actions
 
   defp has_account_balance?(actions, balance) when balance > @balance_min, do: [:stake | actions]
   defp has_account_balance?(actions, _balance), do: actions
