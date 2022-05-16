@@ -220,10 +220,11 @@ defmodule Albagen.Processes.Staker do
   # to pay for the update transaction
   defp do_transaction(
          :update,
-         %{"delegation" => old_validator},
+         staker,
          _balance,
          state = %{account: %Account{address: address, node: host}}
        ) do
+    old_validator = staker["delegation"]
     new_validator = select_active_validator(host, old_validator)
 
     case RPC.send_update_staker_transaction(host, address, new_validator) do
