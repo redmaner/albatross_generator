@@ -295,7 +295,7 @@ defmodule Albagen.Processes.Staker do
 
   def select_active_validator(host, current_validator \\ nil) do
     case Albagen.RPC.list_stakes(host) do
-      {:ok, validators} when is_map(validators) and validators != %{} ->
+      {:ok, validators} when is_list(validators) and validators != [] ->
         validators
         |> drop_current_validator(current_validator)
         |> Enum.random()
@@ -309,9 +309,9 @@ defmodule Albagen.Processes.Staker do
   defp drop_current_validator(validators, nil), do: validators
 
   defp drop_current_validator(validators, current_validator),
-    do: validators |> Map.drop([current_validator])
+    do: validators |> Enum.reject(fn %{"address" => address} -> address == current_validator end)
 
-  defp extract_validator({delegation, _balance}), do: delegation
+  defp extract_validator(%{"address" => address}), do: address
 
   defp extract_validator(_), do: raise("No validator found")
 
