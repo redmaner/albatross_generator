@@ -9,7 +9,7 @@ defmodule Albagen.Processes.Staker do
 
   @nim_in_luna 100_000
   @balance_min 1 * @nim_in_luna
-  @basic_actions [:unstake, :update]
+  @basic_actions [:unstake]
   @default_password "Nimiq devnet test 17 september 2022"
 
   @doc """
@@ -31,7 +31,7 @@ defmodule Albagen.Processes.Staker do
   def create(seed_number) do
     client = Albagen.Config.albatross_nodes() |> Enum.random()
 
-    with {:ok, wallet} <- Albagen.RPC.create_account(client),
+    with {:ok, wallet} <- Albagen.RPC.create_account(client, @default_password),
          {:ok, account} <- Albagen.Model.Account.parse_from_json(wallet, client, seed_number),
          :ok <- Logger.info("New account created", address: account.address, seed: seed_number),
          :ok <- Account.buffer(account),
@@ -183,17 +183,17 @@ defmodule Albagen.Processes.Staker do
          state = %{account: %Account{address: address, node: host}}
        ) do
     new_validator = select_active_validator(host)
-    stake_percentage = [10, 25, 50, 75, 100] |> Enum.random()
+    stake_percentage = 50
     stake_amount = (balance * stake_percentage / 100) |> round()
+    new_staker_amount = balance - stake_amount
 
-    case RPC.send_new_staker_transaction(host, address, new_validator, stake_amount) do
-      {:ok, _return} ->
-        Logger.info(
-          "Action: new_staker => stake: #{stake_amount} Luna, validator #{new_validator}"
-        )
+    with {:ok, _return} <- RPC.send_stake_transaction(host, address, stake_amount),
+         {:ok, _return} <-
+           RPC.send_new_staker_transaction(host, address, new_validator, new_staker_amount) do
+      Logger.info("Action: new_staker => stake: #{stake_amount} Luna, validator #{new_validator}")
 
-        :telemetry.execute([:albagen, :tx], %{value: 1})
-
+      :telemetry.execute([:albagen, :tx], %{value: 1})
+    else
       {:error, _method, reason} ->
         Logger.error("Failed to send new staker transaction: #{inspect(reason)}")
     end
@@ -255,7 +255,8 @@ defmodule Albagen.Processes.Staker do
          _balance,
          state = %{account: %Account{address: address, node: host}}
        ) do
-    unstake_percentage = [10, 25, 50, 75, 100] |> Enum.random()
+    # unstake_percentage = [10, 25, 50, 75, 100] |> Enum.random()
+    unstake_percentage = 100
     unstake_amount = (stake_balance * unstake_percentage / 100) |> round()
 
     case RPC.send_unstake_transaction(host, address, unstake_amount) do
