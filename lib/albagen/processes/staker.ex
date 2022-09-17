@@ -268,6 +268,9 @@ defmodule Albagen.Processes.Staker do
 
       {:error, _method, reason} ->
         Logger.error("Failed to send unstake transaction: #{inspect(reason)}")
+
+      no_match ->
+        Logger.warn("Failed to unstake #{no_match}. Stake #{stake_balance} => unstake amount #{unstake_amount}")
     end
 
     {:noreply, %{state | timer: schedule_staker()}}
