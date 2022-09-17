@@ -7,38 +7,40 @@ defmodule Albagen.Core.Wallet do
   @doc """
   Imports the account if it is not yet imported
   """
-  def ensure_wallet_imported(host, address, key) do
+  def ensure_wallet_imported(host, address, key, passphrase) do
     host
     |> RPC.is_account_imported(address)
-    |> import_account?(host, key)
+    |> import_account?(host, key, passphrase)
   end
 
-  defp import_account?({:ok, false}, host, key) do
+  defp import_account?({:ok, false}, host, key, passphrase) do
     host
-    |> RPC.import_account(key)
+    |> RPC.import_account(key, passphrase)
   end
 
-  defp import_account?({:ok, true}, _host, _key), do: {:ok, "Account is already imported"}
+  defp import_account?({:ok, true}, _host, _key, _passphrase),
+    do: {:ok, "Account is already imported"}
 
-  defp import_account?(error, _host, _key), do: error
+  defp import_account?(error, _host, _key, _passphrase), do: error
 
   @doc """
   Unlocks the account if it is not yet unlocked
   """
-  def ensure_wallet_unlocked(host, address) do
+  def ensure_wallet_unlocked(host, address, passphrase) do
     host
     |> RPC.is_account_unlocked(address)
-    |> unlock_account?(host, address)
+    |> unlock_account?(host, address, passphrase)
   end
 
-  defp unlock_account?({:ok, false}, host, address) do
+  defp unlock_account?({:ok, false}, host, address, passphrase) do
     host
-    |> RPC.unlock_account(address)
+    |> RPC.unlock_account(address, passphrase)
   end
 
-  defp unlock_account?({:ok, true}, _host, _address), do: {:ok, "Account is already unlocked"}
+  defp unlock_account?({:ok, true}, _host, _address, _passphrase),
+    do: {:ok, "Account is already unlocked"}
 
-  defp unlock_account?(error, _host, _address), do: error
+  defp unlock_account?(error, _host, _address, _passphrase), do: error
 
   @doc """
   Waits untill the given account has a balance higher than zero

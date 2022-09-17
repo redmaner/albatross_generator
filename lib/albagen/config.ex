@@ -15,8 +15,7 @@ defmodule Albagen.Config do
     timer_cap_in_secs = timer_cap_in_secs() / 1000
     allow_action_keep = allow_action_keep()
 
-    Logger.info(
-      " Albagen uses the following configuration:
+    Logger.info(" Albagen uses the following configuration:
         stakers_to_create   = #{stakers_to_create}
         sqlite_path         = #{sqlite_path}
         abatross_nodes      = #{albatross_nodes}
@@ -24,8 +23,7 @@ defmodule Albagen.Config do
         new_account_min_nim = #{new_account_min_nim}
         new_account_max_nim = #{new_account_max_nim}
         timer_cap_in_secs   = #{timer_cap_in_secs}
-        allow_action_keep   = #{allow_action_keep}"
-    )
+        allow_action_keep   = #{allow_action_keep}")
   end
 
   def sqlite_path, do: Application.get_env(:albagen, :sqlite_path)

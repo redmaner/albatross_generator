@@ -11,8 +11,8 @@ defmodule Albagen.RPC do
     |> make_rpc_call(host)
   end
 
-  def import_account(host, key) do
-    Nimiqex.Wallet.import_raw_key(key, nil)
+  def import_account(host, key, passphrase) do
+    Nimiqex.Wallet.import_raw_key(key, passphrase)
     |> make_rpc_call(host)
   end
 
@@ -21,8 +21,8 @@ defmodule Albagen.RPC do
     |> make_rpc_call(host)
   end
 
-  def unlock_account(host, address) do
-    Nimiqex.Wallet.unlock_account(address, nil, nil)
+  def unlock_account(host, address, passphrase) do
+    Nimiqex.Wallet.unlock_account(address, passphrase, nil)
     |> make_rpc_call(host)
   end
 
@@ -36,8 +36,8 @@ defmodule Albagen.RPC do
     |> make_rpc_call(host)
   end
 
-  def create_account(host) do
-    Nimiqex.Wallet.create_account("")
+  def create_account(host, passphrase) do
+    Nimiqex.Wallet.create_account(passphrase)
     |> make_rpc_call(host)
   end
 

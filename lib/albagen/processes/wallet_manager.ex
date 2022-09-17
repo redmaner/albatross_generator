@@ -55,8 +55,8 @@ defmodule Albagen.Processes.WalletManager do
   end
 
   defp import_and_unlock_wallet(client, address, private_key) do
-    with {:ok, _result} <- Wallet.ensure_wallet_imported(client, address, private_key),
-         {:ok, _result} <- Wallet.ensure_wallet_unlocked(client, address) do
+    with {:ok, _result} <- Wallet.ensure_wallet_imported(client, address, private_key, nil),
+         {:ok, _result} <- Wallet.ensure_wallet_unlocked(client, address, nil) do
       Logger.info("Imported and unlocked seed address on #{client} -> ready to send transactions")
       :ok
     else

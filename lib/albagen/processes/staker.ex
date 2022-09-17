@@ -10,6 +10,7 @@ defmodule Albagen.Processes.Staker do
   @nim_in_luna 100_000
   @balance_min 1 * @nim_in_luna
   @basic_actions [:unstake, :update]
+  @default_password "Nimiq devnet test 17 september 2022"
 
   @doc """
   Create stakers by a range. This function is ran in a Task
@@ -94,8 +95,9 @@ defmodule Albagen.Processes.Staker do
           account: %Account{address: address, node: host, private_key: private_key}
         }
       ) do
-    with {:ok, _result} <- Wallet.ensure_wallet_imported(host, address, private_key),
-         {:ok, _result} <- Wallet.ensure_wallet_unlocked(host, address),
+    with {:ok, _result} <-
+           Wallet.ensure_wallet_imported(host, address, private_key, @default_password),
+         {:ok, _result} <- Wallet.ensure_wallet_unlocked(host, address, @default_password),
          {:ok, balance} <- Wallet.get_balance(host, address) do
       select_next_transaction(balance, state)
     else
