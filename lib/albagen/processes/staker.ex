@@ -323,7 +323,7 @@ defmodule Albagen.Processes.Staker do
   defp extract_validator(_), do: raise("No validator found")
 
   defp schedule_staker do
-    timer_cap = Config.timer_cap_in_secs() |> :timer.seconds()
+    timer_cap = Config.timer_cap_in_secs()
 
     next = 0..timer_cap |> Enum.random()
 
