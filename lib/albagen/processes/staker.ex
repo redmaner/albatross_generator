@@ -351,7 +351,7 @@ defmodule Albagen.Processes.Staker do
   end
 
   defp schedule_staker do
-    timer_cap = Config.timer_cap_in_secs()
+    timer_cap = Config.timer_cap_in_secs() |> :timer.seconds()
 
     next = 0..timer_cap |> Enum.random()
 
