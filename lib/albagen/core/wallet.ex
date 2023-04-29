@@ -2,7 +2,7 @@ defmodule Albagen.Core.Wallet do
   require Logger
   alias Albagen.RPC
 
-  @wait_for_balance_delay :timer.seconds(5)
+  @wait_for_balance_delay :timer.seconds(300)
 
   @doc """
   Imports the account if it is not yet imported
