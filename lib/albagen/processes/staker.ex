@@ -31,7 +31,7 @@ defmodule Albagen.Processes.Staker do
   def create(seed_number) do
     client = Albagen.Config.albatross_nodes() |> Enum.random()
 
-    with {:ok, wallet} <- Albagen.RPC.create_account(client),
+    with {:ok, wallet} <- Albagen.RPC.create_account(client, @default_password),
          {:ok, account} <- Albagen.Model.Account.parse_from_json(wallet, client, seed_number),
          :ok <- Logger.info("New account created", address: account.address, seed: seed_number),
          :ok <- Account.buffer(account),
