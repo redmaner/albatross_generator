@@ -3,7 +3,7 @@ FROM hexpm/elixir:1.13.3-erlang-24.3-alpine-3.15.0 as builder
 RUN apk update && apk --no-cache --update add tzdata build-base git openssh \
    && cp /usr/share/zoneinfo/Europe/Amsterdam /etc/localtime
 
-ENV MIX_ENV=testnet
+ENV MIX_ENV=prod
 
 WORKDIR /opt/app
 
