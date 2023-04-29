@@ -123,12 +123,12 @@ defmodule Albagen.RPC do
   def send_update_staker_transaction(host, wallet, new_delegation) do
     tx_fee = create_update_staker_transaction(host, wallet, new_delegation) |> extract_tx_fee()
 
-    Nimiqex.Consensus.send_update_transaction(wallet, wallet, new_delegation, tx_fee, "+0")
+    Nimiqex.Consensus.send_update_staker_transaction(wallet, wallet, new_delegation, tx_fee, "+0")
     |> make_rpc_call(host)
   end
 
   defp create_update_staker_transaction(host, wallet, new_delegation) do
-    Nimiqex.Consensus.create_update_transaction(wallet, wallet, new_delegation, 0, "+0")
+    Nimiqex.Consensus.create_update_staker_transaction(wallet, wallet, new_delegation, 0, "+0")
     |> make_rpc_call(host)
   end
 
@@ -168,6 +168,9 @@ defmodule Albagen.RPC do
 
       {:error, reason} ->
         {:error, method, reason}
+
+      {:ok, %{"data" => return}} ->
+        {:ok, return}
 
       return ->
         return

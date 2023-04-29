@@ -27,7 +27,8 @@ defmodule Albagen.Application do
       {DynamicSupervisor, strategy: :one_for_one, name: Albagen.Processes.StakerSupervisor},
       Albagen.Model.Account,
       Albagen.Processes.WalletManager,
-      {Nimiqex, nimiqex_opts}
+      {Nimiqex, nimiqex_opts},
+      {Finch, name: :faucet_client}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

@@ -14,15 +14,15 @@ defmodule Albagen.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
-      mod: {Albagen.Application, []}
+      extra_applications: [:logger]
+      # mod: {Albagen.Application, []}
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:nimiqex, git: "https://github.com/redmaner/nimiqex.git", tag: "0.3.0"},
+      {:nimiqex, git: "https://github.com/redmaner/nimiqex.git", tag: "0.3.1"},
       {:esqlite, "~> 0.7.2"},
       {:nimble_pool, "~> 0.2.5"},
       {:hexate, "~> 0.6.1"},

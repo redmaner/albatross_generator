@@ -11,6 +11,7 @@ defmodule Albagen.Processes.Staker do
   @balance_min 1 * @nim_in_luna
   @basic_actions [:unstake, :update]
   @default_password "Nimiq devnet test 17 september 2022"
+  @seed_with_faucet Application.compile_env(:albagen, :seed_with_faucet)
 
   @doc """
   Create stakers by a range. This function is ran in a Task
@@ -152,27 +153,49 @@ defmodule Albagen.Processes.Staker do
          0,
          state = %{account: %Account{address: address, node: host}}
        ) do
-    min_nim = Config.new_account_min_nim() * @nim_in_luna
-    max_nim = Config.new_account_max_nim() * @nim_in_luna
+    case @seed_with_faucet do
+      true ->
+        with :ok <- Albagen.Core.Faucet.request_funds(address),
+             :ok <- Wallet.wait_for_balance(host, address) do
+          Logger.info("Action: seed_account with faucet")
+          :telemetry.execute([:albagen, :tx], %{value: 1})
 
-    balance = Enum.random(min_nim..max_nim)
+          {:noreply, %{state | timer: schedule_staker()}}
+        else
+          {:error, method, reason} ->
+            Logger.error("Seeding account failed during #{method}: #{inspect(reason)}")
 
-    with {:ok, _} <- Albagen.RPC.send_basic_transaction(host, address, balance),
-         :ok <- Wallet.wait_for_balance(host, address) do
-      Logger.info("Action: seed_account => balance: #{balance}")
-      :telemetry.execute([:albagen, :tx], %{value: 1})
+            # TODO: check the method and maybe retry
+            {:stop, :seeding_failed, state}
 
-      {:noreply, %{state | timer: schedule_staker()}}
-    else
-      {:error, method, reason} ->
-        Logger.error("Seeding account failed during #{method}: #{inspect(reason)}")
+          error ->
+            Logger.error("Unhandled error when seeding account: #{inspect(error)}")
+            {:noreply, state}
+        end
 
-        # TODO: check the method and maybe retry
-        {:stop, :seeding_failed, state}
+      false ->
+        min_nim = Config.new_account_min_nim() * @nim_in_luna
+        max_nim = Config.new_account_max_nim() * @nim_in_luna
 
-      error ->
-        Logger.error("Unhandled error when seeding account: #{inspect(error)}")
-        {:noreply, state}
+        balance = Enum.random(min_nim..max_nim)
+
+        with {:ok, _} <- Albagen.RPC.send_basic_transaction(host, address, balance),
+             :ok <- Wallet.wait_for_balance(host, address) do
+          Logger.info("Action: seed_account => balance: #{balance}")
+          :telemetry.execute([:albagen, :tx], %{value: 1})
+
+          {:noreply, %{state | timer: schedule_staker()}}
+        else
+          {:error, method, reason} ->
+            Logger.error("Seeding account failed during #{method}: #{inspect(reason)}")
+
+            # TODO: check the method and maybe retry
+            {:stop, :seeding_failed, state}
+
+          error ->
+            Logger.error("Unhandled error when seeding account: #{inspect(error)}")
+            {:noreply, state}
+        end
     end
   end
 
@@ -270,7 +293,9 @@ defmodule Albagen.Processes.Staker do
         Logger.error("Failed to send unstake transaction: #{inspect(reason)}")
 
       no_match ->
-        Logger.warn("Failed to unstake #{no_match}. Stake #{stake_balance} => unstake amount #{unstake_amount}")
+        Logger.warn(
+          "Failed to unstake #{no_match}. Stake #{stake_balance} => unstake amount #{unstake_amount}"
+        )
     end
 
     {:noreply, %{state | timer: schedule_staker()}}
